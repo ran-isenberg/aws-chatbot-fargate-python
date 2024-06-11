@@ -1,0 +1,156 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+name: Main Branch - Serverless Service CI/CD
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.12"
+  AWS_REGION: "us-east-1"
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches: [main]
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      id-token: write # required for requesting the JWT (GitHub OIDC)
+    steps:
+      - run: |
+          echo "🎉 The job was automatically triggered by a ${{ env.EVENT_NAME }} event." >> $GITHUB_STEP_SUMMARY
+          echo "🐧 This job is now running on a ${{ env.OS_NAME }} ${{env.OS_ARCH}} server hosted by GitHub!" >> $GITHUB_STEP_SUMMARY
+          echo "🔎 The name of your branch is ${{ env.BRANCH_NAME }} and your repository is ${{ env.REPO_NAME }}." >> $GITHUB_STEP_SUMMARY
+        env:
+          EVENT_NAME: ${{ github.event_name}}
+          OS_NAME: ${{ runner.os }}
+          OS_ARCH: ${{runner.arch }}
+          BRANCH_NAME: ${{ github.ref }}
+          REPO_NAME: ${{ github.repository }}
+      - name: Check out repository code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "poetry" # NOTE: poetry must be installed before this step, or else cache doesn't work
+      - name: Set up Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - name: Install dependencies
+        run: make dev
+      # NOTE: unit tests are connecting to AWS to instantiate boto3 clients/resources
+      #       once that's discussed we can move unit and infra tests as part of the fast quality standards
+      #       see https://github.com/ran-isenberg/serverless-python-demo/pull/38#discussion_r1299372169
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ secrets['AWS_ROLE'] }}
+          role-session-name: ${{ env.SESSION_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+        env:
+          SESSION_NAME: "github-${{github.sha}}-staging"
+      - name: Deploy to AWS
+        run: make deploy
+        env:
+          ENVIRONMENT: staging # Custom environment variable
+      # NOTE: these run unit and integration tests
+      # we can look into coverage collection only later to make it faster and less brittle (--collect-only)
+      - name: Code coverage tests
+        run: make coverage-tests
+        env:
+          ENVIRONMENT: staging # Custom environment variable
+      - name: Codecov
+        uses: codecov/codecov-action@125fc84a9a348dbcf27191600683ec096ec9021c # v4.4.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: yes # optional (default = false)
+          verbose: yes # optional (default = false)
+      - name: Run E2E tests
+        run: make e2e
+        env:
+          ENVIRONMENT: staging # Custom environment variable
+
+  production:
+    runs-on: ubuntu-latest
+    needs: [staging]
+    environment: production
+    permissions:
+      id-token: write # required for requesting the JWT (GitHub OIDC)
+    steps:
+      - run: |
+          echo "🎉 The job was automatically triggered by a ${{ env.EVENT_NAME }} event." >> $GITHUB_STEP_SUMMARY
+          echo "🐧 This job is now running on a ${{ env.OS_NAME }} ${{env.OS_ARCH}} server hosted by GitHub!" >> $GITHUB_STEP_SUMMARY
+          echo "🔎 The name of your branch is ${{ env.BRANCH_NAME }} and your repository is ${{ env.REPO_NAME }}." >> $GITHUB_STEP_SUMMARY
+        env:
+          EVENT_NAME: ${{ github.event_name}}
+          OS_NAME: ${{ runner.os }}
+          OS_ARCH: ${{runner.arch }}
+          BRANCH_NAME: ${{ github.ref }}
+          REPO_NAME: ${{ github.repository }}
+      - name: Check out repository code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "poetry" # NOTE: poetry must be installed before this step, or else cache doesn't work
+      - name: Set up Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - name: Install dependencies
+        run: make dev
+      # NOTE: unit tests are connecting to AWS to instantiate boto3 clients/resources
+      #       once that's discussed we can move unit and infra tests as part of the fast quality standards
+      #       see https://github.com/ran-isenberg/serverless-python-demo/pull/38#discussion_r1299372169
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ secrets['AWS_ROLE'] }}
+          role-session-name: ${{ env.SESSION_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+        env:
+          SESSION_NAME: "github-${{github.sha}}-production"
+      - name: Deploy to AWS
+        run: make deploy
+        env:
+          ENVIRONMENT: production # Custom environment variable
+
+  publish_github_pages:
+    runs-on: ubuntu-latest
+    needs: [production]
+    permissions:
+      contents: write # for docs push
+    if: contains('refs/heads/main', github.ref)
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+      - name: Set up Python
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - name: Install dependencies
+        run: make dev
+      - name: Generate docs
+        run: |
+          poetry run mkdocs gh-deploy --force
