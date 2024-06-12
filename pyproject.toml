@@ -24,6 +24,7 @@ mypy-boto3-dynamodb = "*"
 cachetools = "*"
 boto3 = "^1.26.125"
 aws-lambda-env-modeler = "*"
+streamlit= "*"
 
 [tool.poetry.dev-dependencies]
 # CDK

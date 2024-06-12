@@ -2,13 +2,17 @@
     "cSpell.words": [
         "appconfig",
         "Codecov",
+        "cooldown",
+        "Fargate",
         "getlogin",
         "getuid",
         "mkdocs",
         "mypy",
         "ranisenberg",
         "runtimes",
+        "streamlit",
         "Stubber",
+        "wafv",
         "yapf"
     ]
 }

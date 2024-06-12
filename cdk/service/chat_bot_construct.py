@@ -1,29 +1,24 @@
 from pathlib import Path
 
 from aws_cdk import Duration, RemovalPolicy
-from aws_cdk import aws_s3 as s3
-
-from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr_assets as ecr_assets
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_ecs_patterns as ecs_patterns
-from aws_cdk import aws_elasticloadbalancingv2 as elbv2
-
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_route53 as route53
-from aws_cdk import aws_route53_targets as targets
+from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_wafv2 as wafv2
 from constructs import Construct
 from cdk.service.network_assets_construct import ChatNetworkAssets
+from aws_cdk import aws_logs as logs
 
 
 class ChatBot(Construct):
-    def __init__(self, scope: Construct, identifier: str, waf_acl: wafv2.CfnWebACL, is_production_env: bool, **kwargs) -> None:
-        super().__init__(scope, identifier, **kwargs)
+    def __init__(self, scope: Construct, identifier: str, waf_acl: wafv2.CfnWebACL, network_assets: ChatNetworkAssets) -> None:
+        super().__init__(scope, identifier)
         self.id_ = identifier
-
-        self.network_assets = ChatNetworkAssets(self, 'NetworkAssets')
-
+        self.network_assets = network_assets
         # Build Docker image and push to ECR
 
         current = Path(__file__).parent
@@ -35,11 +30,10 @@ class ChatBot(Construct):
         )
 
         # Create a VPC
-        vpc = ec2.Vpc(self, 'ChatVpc', max_azs=1)
+        vpc = ec2.Vpc(self, 'ChatVpc', max_azs=2)
 
         # Create an ECS cluster
-        cluster = ecs.Cluster(self, 'ChatCluster', vpc=vpc)
-        cluster.enable_container_insights()
+        cluster = ecs.Cluster(self, 'ChatCluster', vpc=vpc, container_insights=True)
 
         # Define an ECS task definition with a single container
         task_definition = ecs.FargateTaskDefinition(
@@ -47,6 +41,10 @@ class ChatBot(Construct):
             'ChatTaskDef',
             memory_limit_mib=512,
             cpu=256,
+            runtime_platform=ecs.RuntimePlatform(
+                operating_system_family=ecs.OperatingSystemFamily.LINUX,
+                cpu_architecture=ecs.CpuArchitecture.ARM64,
+            ),
         )
 
         # Add container to the task definition
@@ -54,7 +52,7 @@ class ChatBot(Construct):
             'ChatBotContainer',
             image=ecs.ContainerImage.from_docker_image_asset(docker_image_asset),
             environment={'Chat_SERVER_HEADLESS': 'true'},
-            logging=ecs.LogDrivers.aws_logs(stream_prefix='Chatbot'),
+            logging=ecs.LogDrivers.aws_logs(stream_prefix='Chatbot', log_retention=logs.RetentionDays.ONE_DAY),
         )
 
         # Open the necessary port internally
@@ -94,13 +92,18 @@ class ChatBot(Construct):
             domain_zone=route53.HostedZone.from_lookup(self, 'BaseZone', domain_name=self.network_assets.domain_name),
             desired_count=1,
             security_groups=[security_group],
-            capacity_provider_strategies=[
-                ecs.CapacityProviderStrategy(capacity_provider='FARGATE_SPOT', weight=1),
-                ecs.CapacityProviderStrategy(capacity_provider='FARGATE', weight=1),
-            ],
             load_balancer_name='chatbot-application-lb',
             redirect_http=True,
             service_name='chatbot-service',
+        )
+
+        # Add policies to task role to allow bedrock API calls
+        fargate_service.task_definition.add_to_task_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=['bedrock:*'],
+                resources=['*'],
+            )
         )
 
         # Enable access logging
@@ -115,7 +118,12 @@ class ChatBot(Construct):
         # Auto-scaling for the ECS service
         scalable_target = fargate_service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)
 
-        scalable_target.scale_on_cpu_utilization('CpuScaling', target_utilization_percent=70)
+        scalable_target.scale_on_cpu_utilization(
+            'CpuScaling',
+            target_utilization_percent=70,
+            scale_in_cooldown=Duration.seconds(60),
+            scale_out_cooldown=Duration.seconds(60),
+        )
 
         scalable_target.scale_on_memory_utilization('MemoryScaling', target_utilization_percent=80)
 
@@ -124,8 +132,3 @@ class ChatBot(Construct):
         # fargate_service.target_group.configure_health_check(
         #    path='/', healthy_threshold_count=2, unhealthy_threshold_count=2, timeout=Duration.seconds(10)
         # )
-
-        # Route 53 A record for the domain
-        self.network_assets.register_target_to_subdomain(
-            target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(fargate_service.load_balancer))
-        )

@@ -4,7 +4,8 @@ from constructs import Construct
 
 from cdk.service.chat_bot_construct import ChatBot
 from cdk.service.constants import OWNER_TAG, SERVICE_NAME, SERVICE_NAME_TAG
-from cdk.service.utils import get_construct_name, get_username
+from cdk.service.network_assets_construct import ChatNetworkAssets
+from cdk.service.utils import get_username
 
 
 class ServiceStack(Stack):
@@ -12,11 +13,13 @@ class ServiceStack(Stack):
         super().__init__(scope, id, **kwargs)
         self._add_stack_tags()
 
+        self.network_assets = ChatNetworkAssets(self, 'NetworkAssets')
+
         self.api = ChatBot(
             self,
             'ChatBot',
             waf_acl=None,
-            is_production_env=is_production_env,
+            network_assets=self.network_assets,
         )
 
         # add security check
