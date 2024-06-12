@@ -1,18 +1,20 @@
 from pathlib import Path
 
 from aws_cdk import Duration, RemovalPolicy
+from aws_cdk import aws_s3 as s3
 
-# from aws_cdk import aws_certificatemanager as acm
+from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr_assets as ecr_assets
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_ecs_patterns as ecs_patterns
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 
-# from aws_cdk import aws_route53 as route53
-# from aws_cdk import aws_route53_targets as targets
+from aws_cdk import aws_route53 as route53
+from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_wafv2 as wafv2
 from constructs import Construct
+from cdk.service.network_assets_construct import ChatNetworkAssets
 
 
 class ChatBot(Construct):
@@ -20,8 +22,7 @@ class ChatBot(Construct):
         super().__init__(scope, identifier, **kwargs)
         self.id_ = identifier
 
-        # Parameters
-        domain_name = 'ranthebuilder-chatbot.com'
+        self.network_assets = ChatNetworkAssets(self, 'NetworkAssets')
 
         # Build Docker image and push to ECR
 
@@ -38,6 +39,7 @@ class ChatBot(Construct):
 
         # Create an ECS cluster
         cluster = ecs.Cluster(self, 'ChatCluster', vpc=vpc)
+        cluster.enable_container_insights()
 
         # Define an ECS task definition with a single container
         task_definition = ecs.FargateTaskDefinition(
@@ -45,10 +47,6 @@ class ChatBot(Construct):
             'ChatTaskDef',
             memory_limit_mib=512,
             cpu=256,
-            capacity_provider_strategies=[
-                ecs.CapacityProviderStrategy(capacity_provider='FARGATE_SPOT', weight=2),
-                ecs.CapacityProviderStrategy(capacity_provider='FARGATE', weight=1),
-            ],
         )
 
         # Add container to the task definition
@@ -71,8 +69,16 @@ class ChatBot(Construct):
         security_group.add_ingress_rule(ec2.Peer.any_ipv6(), ec2.Port.tcp(80), 'Allow HTTP traffic from the internet (IPv6)')
         security_group.add_ingress_rule(ec2.Peer.any_ipv6(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet (IPv6)')
 
-        # Create a certificate for the domain
-        # certificate = acm.Certificate(self, 'ChatCertificate', domain_name=domain_name, validation=acm.CertificateValidation.from_dns())
+        # Create an S3 bucket for ALB access logs
+        log_bucket = s3.Bucket(
+            self,
+            'ALBAccessLogsBucket',
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+        )
 
         # Create a Fargate service and make it publicly accessible
         fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
@@ -83,27 +89,35 @@ class ChatBot(Construct):
             assign_public_ip=False,
             public_load_balancer=True,
             listener_port=443,
-            # certificate=certificate,
-            # domain_name=domain_name,
-            # domain_zone=route53.HostedZone.from_lookup(self, 'BaseZone', domain_name=domain_name),
+            certificate=self.network_assets.certificate,
+            domain_name=self.network_assets.full_domain,
+            domain_zone=route53.HostedZone.from_lookup(self, 'BaseZone', domain_name=self.network_assets.domain_name),
             desired_count=1,
             security_groups=[security_group],
+            capacity_provider_strategies=[
+                ecs.CapacityProviderStrategy(capacity_provider='FARGATE_SPOT', weight=1),
+                ecs.CapacityProviderStrategy(capacity_provider='FARGATE', weight=1),
+            ],
+            load_balancer_name='chatbot-application-lb',
+            redirect_http=True,
+            service_name='chatbot-service',
         )
+
+        # Enable access logging
+        fargate_service.load_balancer.log_access_logs(log_bucket)
 
         # Associate the WAF web ACL with the ALB
         # wafv2.CfnWebACLAssociation(
         #    self, 'ChatWebACLAssociation', resource_arn=fargate_service.load_balancer.load_balancer_arn, web_acl_arn=waf_acl.attr_arn
         # )
 
-        # Redirect HTTP to HTTPS
-        http_listener = fargate_service.load_balancer.add_listener('HTTPListener', port=80, open=True)
-        http_listener.add_action(
-            'HTTPRedirect',
-            action=elbv2.ListenerAction.redirect(protocol='HTTPS', port='443', path='/#{path}', query='#{query}', permanent=True),
-        )
-
         # Limit scaling to one container
-        fargate_service.service.auto_scale_task_count(min_capacity=1, max_capacity=1)
+        # Auto-scaling for the ECS service
+        scalable_target = fargate_service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)
+
+        scalable_target.scale_on_cpu_utilization('CpuScaling', target_utilization_percent=70)
+
+        scalable_target.scale_on_memory_utilization('MemoryScaling', target_utilization_percent=80)
 
         # Ensure the load balancer is deleted when the stack is destroyed
         fargate_service.load_balancer.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -112,10 +126,6 @@ class ChatBot(Construct):
         # )
 
         # Route 53 A record for the domain
-        # route53.ARecord(
-        #    self,
-        #  'ChatAliasRecord',
-        # zone=route53.HostedZone.from_lookup(self, 'HostedZone', domain_name=domain_name),
-        # target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(fargate_service.load_balancer)),
-        # record_name=domain_name,
-        # )
+        self.network_assets.register_target_to_subdomain(
+            target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(fargate_service.load_balancer))
+        )
