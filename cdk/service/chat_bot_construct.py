@@ -110,9 +110,9 @@ class ChatBot(Construct):
         fargate_service.load_balancer.log_access_logs(log_bucket)
 
         # Associate the WAF web ACL with the ALB
-        # wafv2.CfnWebACLAssociation(
-        #    self, 'ChatWebACLAssociation', resource_arn=fargate_service.load_balancer.load_balancer_arn, web_acl_arn=waf_acl.attr_arn
-        # )
+        wafv2.CfnWebACLAssociation(
+            self, 'ChatWebACLAssociation', resource_arn=fargate_service.load_balancer.load_balancer_arn, web_acl_arn=waf_acl.attr_arn
+        )
 
         # Limit scaling to one container
         # Auto-scaling for the ECS service

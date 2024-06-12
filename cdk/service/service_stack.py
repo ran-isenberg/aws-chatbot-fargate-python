@@ -6,6 +6,7 @@ from cdk.service.chat_bot_construct import ChatBot
 from cdk.service.constants import OWNER_TAG, SERVICE_NAME, SERVICE_NAME_TAG
 from cdk.service.network_assets_construct import ChatNetworkAssets
 from cdk.service.utils import get_username
+from cdk.service.waf_construct import WafToAblConstruct
 
 
 class ServiceStack(Stack):
@@ -15,10 +16,12 @@ class ServiceStack(Stack):
 
         self.network_assets = ChatNetworkAssets(self, 'NetworkAssets')
 
+        self.waf = WafToAblConstruct(self, 'WafToAbl')
+
         self.api = ChatBot(
             self,
             'ChatBot',
-            waf_acl=None,
+            waf_acl=self.waf.web_acl,
             network_assets=self.network_assets,
         )
 
