@@ -14,7 +14,7 @@ class ServiceStack(Stack):
 
         self.api = ChatBot(
             self,
-            get_construct_name(stack_prefix=id, construct_name='ChatBot'),
+            'ChatBot',
             waf_acl=None,
             is_production_env=is_production_env,
         )
