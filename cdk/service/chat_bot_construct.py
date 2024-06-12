@@ -15,7 +15,7 @@ from aws_cdk import aws_wafv2 as wafv2
 from constructs import Construct
 
 
-class StreamlitOnEcsStack(Construct):
+class ChatBot(Construct):
     def __init__(self, scope: Construct, construct_id: str, waf_acl: wafv2.CfnWebACL, is_production_env: bool, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         self.id_ = construct_id
@@ -25,8 +25,8 @@ class StreamlitOnEcsStack(Construct):
 
         # Build Docker image and push to ECR
 
-        current = Path(__file__)
-        docker_dir = Path(current / 'docker')
+        current = Path(__file__).parent
+        docker_dir = str(Path(current / 'docker'))
         docker_image_asset = ecr_assets.DockerImageAsset(
             self,
             'StreamlitDockerImage',
@@ -78,21 +78,19 @@ class StreamlitOnEcsStack(Construct):
             # domain_name=domain_name,
             # domain_zone=route53.HostedZone.from_lookup(self, 'BaseZone', domain_name=domain_name),
             desired_count=1,
-            min_healthy_percent=100,
-            max_healthy_percent=100,
             security_groups=[security_group],
         )
 
         # Associate the WAF web ACL with the ALB
-        wafv2.CfnWebACLAssociation(
-            self, 'StreamlitWebACLAssociation', resource_arn=fargate_service.load_balancer.load_balancer_arn, web_acl_arn=waf_acl.attr_arn
-        )
+        # wafv2.CfnWebACLAssociation(
+        #    self, 'StreamlitWebACLAssociation', resource_arn=fargate_service.load_balancer.load_balancer_arn, web_acl_arn=waf_acl.attr_arn
+        # )
 
         # Redirect HTTP to HTTPS
         http_listener = fargate_service.load_balancer.add_listener('HTTPListener', port=80, open=True)
         http_listener.add_action(
             'HTTPRedirect',
-            action=elbv2.ListenerAction.redirect(protocol='HTTPS', port='443', path='/#{path}', query='#{query}', status_code='HTTP_301'),
+            action=elbv2.ListenerAction.redirect(protocol='HTTPS', port='443', path='/#{path}', query='#{query}', permanent=True),
         )
 
         # Limit scaling to one container

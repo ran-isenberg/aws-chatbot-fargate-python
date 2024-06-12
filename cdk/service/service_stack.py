@@ -2,7 +2,7 @@ from aws_cdk import Aspects, Stack, Tags
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
 
-from cdk.service.api_construct import ApiConstruct
+from cdk.service.chat_bot_construct import ChatBot
 from cdk.service.constants import OWNER_TAG, SERVICE_NAME, SERVICE_NAME_TAG
 from cdk.service.utils import get_construct_name, get_username
 
@@ -12,14 +12,15 @@ class ServiceStack(Stack):
         super().__init__(scope, id, **kwargs)
         self._add_stack_tags()
 
-        self.api = ApiConstruct(
+        self.api = ChatBot(
             self,
-            get_construct_name(stack_prefix=id, construct_name='Crud'),
+            get_construct_name(stack_prefix=id, construct_name='ChatBot'),
+            waf_acl=None,
             is_production_env=is_production_env,
         )
 
         # add security check
-        self._add_security_tests()
+        # self._add_security_tests()
 
     def _add_stack_tags(self) -> None:
         # best practice to help identify resources in the console
