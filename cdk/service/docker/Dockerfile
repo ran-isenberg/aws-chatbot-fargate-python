@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install the required packages
-RUN pip install streamlit
+# Install the dependencies specified in the requirements file
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the port Streamlit runs on
 EXPOSE 8501

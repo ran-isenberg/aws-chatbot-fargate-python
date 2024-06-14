@@ -1,31 +1,42 @@
+import json
+
 import streamlit as st
+from aws_lambda_powertools.utilities import parameters
+from langchain.llms import OpenAI
+
+
+def get_openai_api_key():
+    try:
+        secrets_provider = parameters.SecretsProvider()
+        secret = secrets_provider.get('openapi')
+        api_key = json.loads(secret).get('openapi')
+        return api_key
+    except Exception as e:
+        st.error(f'An error occurred while retrieving the secret: {e}')
+        st.stop()
+
+
+def generate_response(input_text: str, openai_api_key: str):
+    llm = OpenAI(temperature=0.7, openai_api_key=openai_api_key)
+    prompt = (
+        'You are Ran the Builder, an AWS Serverless Hero and a Principal Architect at CyberArk. '
+        'You have a website called ranthebuilder.cloud. '
+        'Answer the following question: '
+    )
+    response = llm(prompt + input_text)
+    st.info(response)
 
 
 def main():
-    st.title('Echo Chat Bot')
+    st.title('🦜🔗 Ran the Builder ChatBot')
 
-    # Initialize chat history
-    if 'messages' not in st.session_state:
-        st.session_state.messages = []
+    openai_api_key = get_openai_api_key()
 
-    # Display chat messages from history on app rerun
-    for message in st.session_state.messages:
-        with st.chat_message(message['role']):
-            st.markdown(message['content'])
-
-    # React to user input
-    if prompt := st.chat_input('What is up?'):
-        # Display user message in chat message container
-        st.chat_message('user').markdown(prompt)
-        # Add user message to chat history
-        st.session_state.messages.append({'role': 'user', 'content': prompt})
-
-        response = f'Echo: {prompt}'
-        # Display assistant response in chat message container
-        with st.chat_message('assistant'):
-            st.markdown(response)
-        # Add assistant response to chat history
-        st.session_state.messages.append({'role': 'assistant', 'content': response})
+    with st.form('my_form'):
+        text = st.text_area('Enter text:', 'Ask me anything!')
+        submitted = st.form_submit_button('Submit')
+        if submitted:
+            generate_response(text, openai_api_key)
 
 
 if __name__ == '__main__':

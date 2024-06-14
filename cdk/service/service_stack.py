@@ -26,7 +26,7 @@ class ServiceStack(Stack):
         )
 
         # add security check
-        # self._add_security_tests()
+        self._add_security_tests()
 
     def _add_stack_tags(self) -> None:
         # best practice to help identify resources in the console
@@ -48,5 +48,7 @@ class ServiceStack(Stack):
                 {'id': 'AwsSolutions-APIG4', 'reason': 'authorization not mandatory in a sample template'},
                 {'id': 'AwsSolutions-COG4', 'reason': 'not using cognito'},
                 {'id': 'AwsSolutions-L1', 'reason': 'False positive'},
+                {'id': 'AwsSolutions-VPC7', 'reason': 'Not interested in this check'},
+                {'id': 'AwsSolutions-EC23', 'reason': 'False positive, port is limited to 80 or 443'},
             ],
         )
