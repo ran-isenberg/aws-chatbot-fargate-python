@@ -34,7 +34,7 @@ class ChatBot(Construct):
         vpc = ec2.Vpc(self, 'ChatVpc', max_azs=2)
 
         # Create an ECS cluster
-        cluster = ecs.Cluster(self, 'ChatCluster', vpc=vpc, container_insights=True)
+        cluster = ecs.Cluster(self, 'ChatCluster', vpc=vpc, container_insights=True, enable_fargate_capacity_providers=True)
 
         # Define an ECS task definition with a single container
         task_definition = ecs.FargateTaskDefinition(
@@ -70,12 +70,11 @@ class ChatBot(Construct):
         access_logs_bucket = s3.Bucket(
             scope=self,
             id='accessLogsS3Bucket',
-            bucket_name='access-logs-bucket',
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             public_read_access=False,
             removal_policy=RemovalPolicy.DESTROY,  # removal_policy=RemovalPolicy.RETAIN,
-            versioned=True,
+            versioned=False,
             auto_delete_objects=True,  # False in production
             enforce_ssl=True,
         )
@@ -110,8 +109,11 @@ class ChatBot(Construct):
             security_groups=[security_group],
             load_balancer_name='chatbot-application-lb',
             redirect_http=True,
-            service_name='chatbot-service',
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
+            capacity_provider_strategies=[
+                # ecs.CapacityProviderStrategy(capacity_provider='FARGATE_SPOT', weight=1), # not supported for ARM64
+                ecs.CapacityProviderStrategy(capacity_provider='FARGATE', weight=1),
+            ],
         )
 
         # Add policies to task role to allow bedrock API calls
@@ -127,7 +129,7 @@ class ChatBot(Construct):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=['secretsmanager:GetSecretValue'],
-                resources=['arn:aws:secretsmanager:us-east-1:390096245597:secret:openapi-06Mp0g'],
+                resources=['*'],  # place secret ARN here
             )
         )
 
@@ -155,4 +157,4 @@ class ChatBot(Construct):
         # Ensure the load balancer is deleted when the stack is destroyed
         fargate_service.load_balancer.apply_removal_policy(RemovalPolicy.DESTROY)
         # add health check
-        fargate_service.target_group.configure_health_check(path='/health', interval=Duration.seconds(60), timeout=Duration.seconds(5))
+        fargate_service.target_group.configure_health_check(path='/healthz', interval=Duration.seconds(60), timeout=Duration.seconds(5), enabled=True)
