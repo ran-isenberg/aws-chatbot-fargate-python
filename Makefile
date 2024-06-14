@@ -1,4 +1,4 @@
-.PHONY: dev lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format compare-openapi openapi
+.PHONY: dev lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs build lint-docs format compare-openapi openapi
 PYTHON := ".venv/bin/python3"
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
 
@@ -37,16 +37,11 @@ pre-commit:
 mypy-lint:
 	poetry run mypy --pretty service cdk tests
 
-deps:
-	poetry export --only=dev --format=requirements.txt > dev_requirements.txt
-	poetry export --without=dev --format=requirements.txt > lambda_requirements.txt
+build:
+	poetry export --without=dev --format=requirements.txt > cdk/service/docker/requirements.txt
 
 unit:
 	poetry run pytest tests/unit  --cov-config=.coveragerc --cov=service --cov-report xml
-
-build: deps
-	mkdir -p .build/lambdas ; cp -r service .build/lambdas
-	mkdir -p .build/common_layer ; poetry export --without=dev --format=requirements.txt > .build/common_layer/requirements.txt
 
 infra-tests: build
 	poetry run pytest tests/infrastructure
@@ -57,7 +52,7 @@ integration:
 e2e:
 	poetry run pytest tests/e2e  --cov-config=.coveragerc --cov=service --cov-report xml
 
-pr: deps format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
+pr: build format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
 
 coverage-tests:
 	poetry run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=service --cov-report xml
