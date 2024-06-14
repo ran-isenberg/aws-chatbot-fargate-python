@@ -110,10 +110,10 @@ class ChatBot(Construct):
             load_balancer_name='chatbot-application-lb',
             redirect_http=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
-            capacity_provider_strategies=[
-                # ecs.CapacityProviderStrategy(capacity_provider='FARGATE_SPOT', weight=1), # not supported for ARM64
-                ecs.CapacityProviderStrategy(capacity_provider='FARGATE', weight=1),
-            ],
+            # capacity_provider_strategies=[
+            # ecs.CapacityProviderStrategy(capacity_provider='FARGATE_SPOT', weight=1), # not supported for ARM64
+            # ecs.CapacityProviderStrategy(capacity_provider='FARGATE', weight=1),
+            # ],
         )
 
         # Add policies to task role to allow bedrock API calls
