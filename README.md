@@ -1,152 +1,93 @@
+# ChatBot AWS CDK Deployment
 
-# AWS Lambda Handler Cookbook (Python)
-
-[![license](https://img.shields.io/github/license/ran-isenberg/aws-lambda-handler-cookbook)](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/master/LICENSE)
+[![license](https://img.shields.io/github/license/ran-isenberg/aws-chatbot-fargate-python)](https://github.com/ran-isenberg/aws-chatbot-fargate-python/blob/master/LICENSE)
 ![PythonSupport](https://img.shields.io/static/v1?label=python&message=3.12&color=blue?style=flat-square&logo=python)
-[![codecov](https://codecov.io/gh/ran-isenberg/aws-lambda-handler-cookbook/branch/main/graph/badge.svg?token=P2K7K4KICF)](https://codecov.io/gh/ran-isenberg/aws-lambda-handler-cookbook)
-![version](https://img.shields.io/github/v/release/ran-isenberg/aws-lambda-handler-cookbook)
-![github-star-badge](https://img.shields.io/github/stars/ran-isenberg/aws-lambda-handler-cookbook.svg?style=social)
-![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ran-isenberg/aws-lambda-handler-cookbook/badge)
-![issues](https://img.shields.io/github/issues/ran-isenberg/aws-lambda-handler-cookbook)
+![version](https://img.shields.io/github/v/release/ran-isenberg/aws-chatbot-fargate-python)
+![github-star-badge](https://img.shields.io/github/stars/ran-isenberg/aws-chatbot-fargate-python.svg?style=social)
+![issues](https://img.shields.io/github/issues/ran-isenberg/aws-chatbot-fargate-python)
 
-![alt text](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/main/docs/media/banner.png?raw=true)
+![alt text](https://github.com/ran-isenberg/aws-chatbot-fargate-python/blob/main/docs/media/banner.png?raw=true)
 
-This project provides a working, open source based, AWS Lambda handler skeleton Python code including DEPLOYMENT code with CDK and a pipeline.
+This project deploys an AWS Fargate-based ESC cluster web application using AWS CDK (Cloud Development Kit).
 
-This project can serve as a template for new Serverless services - CDK deployment code, pipeline and handler are covered.
+The infrastructure includes an ECS cluster, Fargate service, Application Load Balancer, VPC, and WAF and includes security best practices with CDK-nag verification.
 
-**[📜Documentation](https://ran-isenberg.github.io/aws-lambda-handler-cookbook/)** | **[Blogs website](https://www.ranthebuilder.cloud)**
-> **Contact details | ran.isenberg@ranthebuilder.cloud**
+The web application is a chatbot but can replaced to any application you wish.
+
+The chatbot is based on an implementation by [Streamlit](https://streamlit.io/) and the initial prompt is that the chatbot is me, Ran the builder, a serverless hero and attempts to answer as me.
+
+The Chatbot uses custom domain (you can remove it or change it to your own domain) and assume an OpenAI token exists in the account in the form of a secrets manager secret for making API calls to OpenAI.
+
+**[Blogs website](https://www.ranthebuilder.cloud)** > **Contact details | ran.isenberg@ranthebuilder.cloud**
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/IsenbergRan?label=Follow&style=social)](https://twitter.com/IsenbergRan)
 [![Website](https://img.shields.io/badge/Website-www.ranthebuilder.cloud-blue)](https://www.ranthebuilder.cloud/)
 
-## Getting Started
 
-You can start with a clean service out of this template repository without using the 'Template' button on GitHub.
+## Prerequisites
 
-You can use Cookiecutter.
+- AWS CLI configured with appropriate credentials
+- Node.js (with npm)
+- Python 3.12 or higher
+- AWS CDK 2.149.0 or greater installed
+- OpenAI API key deployed as a secret (see cdk/service/Docker/app.py)
 
-* Cookiecutter - install with pip/brew ``brew install cookiecutter`` or ``pip install cookiecutter``
+## Project Structure
 
-Then run:
+- `cdk.service.network_assets_construct`: Custom construct for network-related resources.
+- `docker/`: Directory containing the Dockerfile for the chat application.
+- `app.py`: Entry point for the CDK application.
+- `chat_bot_construct.py` - the Fargate construct
 
-```
-cookiecutter gh:ran-isenberg/cookiecutter-serverless-python
-```
+## CDK Stack Overview
 
-Answer the questions to select repo name, service name, etc.:
+### Resources Created
 
-![logo](https://github.com/ran-isenberg/cookiecutter-serverless-python/blob/main/media/howto.png?raw=true)
+- **VPC**: Virtual Private Cloud with 2 Availability Zones.
+- **ECR**: Amazon Elastic Container Registry to store Docker images.
+- **ECS Cluster**: Elastic Container Service cluster with Fargate capacity providers.
+- **Fargate Task Definition**: Defines the container specifications.
+- **Fargate Service**: Deploys the container and integrates with the Application Load Balancer.
+- **Application Load Balancer**: Publicly accessible load balancer with SSL termination.
+- **WAF**: Web Application Firewall to protect the application.
+- **S3 Buckets**: Used for access logs with encryption and secure settings.
+- **IAM Roles and Policies**: Permissions for ECS tasks and other services.
+- **Auto Scaling**: CPU and memory-based auto-scaling configuration.
 
+## Deployment
 
-**That's it, your developer environment has been set! you are ready to deploy the service:**
+### Step 1: Install Dependencies
 
-```
+Navigate to your project directory and install the necessary dependencies:
+
+```bash
 cd {new repo folder}
 poetry shell
+poetry install
 make deploy
 ```
 
-You can also run 'make pr' will run all checks, synth, file formatters , unit tests, deploy to AWS and run integration and E2E tests.
-
-## **The Problem**
-
-Starting a Serverless service can be overwhelming. You need to figure out many questions and challenges that have nothing to do with your business domain:
-
-- How to deploy to the cloud? What IAC framework do you choose?
-- How to write a SaaS-oriented CI/CD pipeline? What does it need to contain?
-- How do you handle observability, logging, tracing, metrics?
-- How do you write a Lambda function?
-- How do you handle testing?
-- What makes an AWS Lambda handler resilient, traceable, and easy to maintain? How do you write such a code?
-
-
-## **The Solution**
-
-This project aims to reduce cognitive load and answer these questions for you by providing a skeleton Python Serverless service template that implements best practices for AWS Lambda, Serverless CI/CD, and AWS CDK in one template project.
-
-## Concepts
-
-I spoke at AWS re:invent 2023 with Heitor Lessa, Chief Architect of Powertools for AWS Lambda about the concepts I implemented in this project.
-
-[![Watch the video](https://img.youtube.com/vi/52W3Qyg242Y/maxresdefault.jpg)](https://www.youtube.com/watch?v=52W3Qyg242Y)
-
-### Serverless Service - The Order service
-
-- This project provides a working orders service where customers can create orders of items.
-
-- The project deploys an API GW with an AWS Lambda integration under the path POST /api/orders/ and stores data in a DynamoDB table.
-
-![design](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/main/docs/media/design.png?raw=true)
-<br></br>
-
-#### **Monitoring Design**
-![monitoring_design](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/main/docs/media/monitoring_design.png?raw=true)
-<br></br>
-### **Features**
-
-- Python Serverless service with a recommended file structure.
-- CDK infrastructure with infrastructure tests and security tests.
-- CI/CD pipelines based on Github actions that deploys to AWS with python linters, complexity checks and style formatters.
-- CI/CD pipeline deploys to dev/staging and production environments with different gates between each environment
-- Makefile for simple developer experience.
-- The AWS Lambda handler embodies Serverless best practices and has all the bells and whistles for a proper production ready handler.
-- AWS Lambda handler uses [AWS Lambda Powertools](https://docs.powertools.aws.dev/lambda-python/).
-- AWS Lambda handler 3 layer architecture: handler layer, logic layer and data access layer
-- Features flags and configuration based on AWS AppConfig
-- Idempotent API
-- REST API protected by WAF with four AWS managed rules in production deployment
-- CloudWatch dashboards - High level and low level including CloudWatch alarms
-- Unit, infrastructure, security, integration and end to end tests.
-- Automatically generated OpenAPI endpoint: /swagger with Pydantic schemas for both requests and responses
-- CI swagger protection - fails the PR if your swagger JSON file (stored at docs/swagger/openapi.json) is out of date
-- Automated protection against API breaking changes
-
-
-## CDK Deployment
-The CDK code create an API GW with a path of /api/orders which triggers the lambda on 'POST' requests.
-
-The AWS Lambda handler uses a Lambda layer optimization which takes all the packages under the [packages] section in the Pipfile and downloads them in via a Docker instance.
-
-This allows you to package any custom dependencies you might have, just add them to the Pipfile under the [packages] section.
-
-## Serverless Best Practices
-The AWS Lambda handler will implement multiple best practice utilities.
-
-Each utility is implemented when a new blog post is published about that utility.
-
-The utilities cover multiple aspect of a production-ready service, including:
-
-- [Logging](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-elevate-your-handler-s-code-part-1-logging)
-- [Observability: Monitoring and Tracing](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-elevate-your-handler-s-code-part-2-observability)
-- [Observability: Business KPIs Metrics](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-elevate-your-handler-s-code-part-3-business-domain-observability)
-- [Environment Variables](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-environment-variables)
-- [Input Validation](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-elevate-your-handler-s-code-part-5-input-validation)
-- [Dynamic Configuration & feature flags](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-part-6-feature-flags-configuration-best-practices)
-- [Start Your AWS Serverless Service With Two Clicks](https://www.ranthebuilder.cloud/post/aws-lambda-cookbook-part-7-how-to-use-the-aws-lambda-cookbook-github-template-project)
-- [CDK Best practices](https://github.com/ran-isenberg/aws-lambda-handler-cookbook)
-- [Serverless Monitoring](https://www.ranthebuilder.cloud/post/how-to-effortlessly-monitor-serverless-applications-with-cloudwatch-part-one)
-- [API Idempotency](https://www.ranthebuilder.cloud/post/serverless-api-idempotency-with-aws-lambda-powertools-and-cdk)
-- [Serverless OpenAPI Documentation with AWS Powertools](https://www.ranthebuilder.cloud/post/serverless-open-api-documentation-with-aws-powertools)
-
-## Getting started
-Head over to the complete project documentation pages at GitHub pages at [https://ran-isenberg.github.io/aws-lambda-handler-cookbook](https://ran-isenberg.github.io/aws-lambda-handler-cookbook/)
+You can also run 'make pr' will run all checks, synth, file formatters and deploy to AWS.
 
 ## Code Contributions
-Code contributions are welcomed. Read this [guide.](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/main/CONTRIBUTING.md)
+
+Code contributions are welcomed. Read this [guide.](https://github.com/ran-isenberg/aws-chatbot-fargate-python/blob/main/CONTRIBUTING.md)
 
 ## Code of Conduct
-Read our code of conduct [here.](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/main/CODE_OF_CONDUCT.md)
+
+Read our code of conduct [here.](https://github.com/ran-isenberg/aws-chatbot-fargate-python/blob/main/CODE_OF_CONDUCT.md)
 
 ## Connect
-* Email: [ran.isenberg@ranthebuilder.cloud](mailto:ran.isenberg@ranthebuilder.cloud)
-* Blog Website [RanTheBuilder](https://www.ranthebuilder.cloud)
-* LinkedIn: [ranisenberg](https://www.linkedin.com/in/ranisenberg/)
-* Twitter: [IsenbergRan](https://twitter.com/IsenbergRan)
+
+- Email: [ran.isenberg@ranthebuilder.cloud](mailto:ran.isenberg@ranthebuilder.cloud)
+- Blog Website [RanTheBuilder](https://www.ranthebuilder.cloud)
+- LinkedIn: [ranisenberg](https://www.linkedin.com/in/ranisenberg/)
+- Twitter: [IsenbergRan](https://twitter.com/IsenbergRan)
 
 ## Credits
-* [AWS Lambda Powertools (Python)](https://github.com/aws-powertools/powertools-lambda-python)
+
+- [AWS Lambda Powertools (Python)](https://github.com/aws-powertools/powertools-lambda-python)
 
 ## License
-This library is licensed under the MIT License. See the [LICENSE](https://github.com/ran-isenberg/aws-lambda-handler-cookbook/blob/main/LICENSE) file.
+
+This library is licensed under the MIT License. See the [LICENSE](https://github.com/ran-isenberg/aws-chatbot-fargate-python/blob/main/LICENSE) file.

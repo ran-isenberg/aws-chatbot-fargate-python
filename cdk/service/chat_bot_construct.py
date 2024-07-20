@@ -73,7 +73,7 @@ class ChatBot(Construct):
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             public_read_access=False,
-            removal_policy=RemovalPolicy.DESTROY,  # removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.DESTROY,  # removal_policy=RemovalPolicy.RETAIN in production
             versioned=False,
             auto_delete_objects=True,  # False in production
             enforce_ssl=True,
@@ -85,7 +85,7 @@ class ChatBot(Construct):
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             public_read_access=False,
-            removal_policy=RemovalPolicy.DESTROY,  # removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.DESTROY,  # removal_policy=RemovalPolicy.RETAIN in production
             server_access_logs_bucket=access_logs_bucket,
             server_access_logs_prefix='chatbot-bucket/serverAccessLogging',
             versioned=False,
@@ -116,15 +116,7 @@ class ChatBot(Construct):
             # ],
         )
 
-        # Add policies to task role to allow bedrock API calls
-        fargate_service.task_definition.add_to_task_role_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=['bedrock:*'],
-                resources=['*'],
-            )
-        )
-
+        # Add a policy to allow the Fargate service to access the secret for openAI for chatbot
         fargate_service.task_definition.add_to_task_role_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
