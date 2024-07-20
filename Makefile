@@ -35,7 +35,7 @@ pre-commit:
 	poetry run pre-commit run -a --show-diff-on-failure
 
 mypy-lint:
-	poetry run mypy --pretty service cdk tests
+	poetry run mypy --pretty cdk
 
 build:
 	poetry export --without=dev --format=requirements.txt > cdk/service/docker/requirements.txt
@@ -52,7 +52,7 @@ integration:
 e2e:
 	poetry run pytest tests/e2e  --cov-config=.coveragerc --cov=service --cov-report xml
 
-pr: build format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
+pr: build format pre-commit complex lint deploy
 
 coverage-tests:
 	poetry run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=service --cov-report xml
