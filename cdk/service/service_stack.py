@@ -39,16 +39,7 @@ class ServiceStack(Stack):
         NagSuppressions.add_stack_suppressions(
             self,
             [
-                {'id': 'AwsSolutions-IAM4', 'reason': 'policy for cloudwatch logs.'},
-                {'id': 'AwsSolutions-IAM5', 'reason': 'policy for cloudwatch logs.'},
-                {'id': 'AwsSolutions-APIG2', 'reason': 'lambda does input validation'},
-                {'id': 'AwsSolutions-APIG1', 'reason': 'not mandatory in a sample template'},
-                {'id': 'AwsSolutions-APIG3', 'reason': 'not mandatory in a sample template'},
-                {'id': 'AwsSolutions-APIG6', 'reason': 'not mandatory in a sample template'},
-                {'id': 'AwsSolutions-APIG4', 'reason': 'authorization not mandatory in a sample template'},
-                {'id': 'AwsSolutions-COG4', 'reason': 'not using cognito'},
-                {'id': 'AwsSolutions-L1', 'reason': 'False positive'},
-                {'id': 'AwsSolutions-VPC7', 'reason': 'Not interested in this check'},
-                {'id': 'AwsSolutions-EC23', 'reason': 'False positive, port is limited to 80 or 443'},
+                {'id': 'AwsSolutions-IAM5', 'reason': 'fetch secret from secret manager, should be a concrete secret ARN in a real app'},
+                {'id': 'AwsSolutions-EC23', 'reason': 'we accept ingress from all IPs and have WAF to prevent DDOS'},
             ],
         )

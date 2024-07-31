@@ -20,8 +20,8 @@ class ChatBot(Construct):
         super().__init__(scope, identifier)
         self.id_ = identifier
         self.network_assets = network_assets
-        # Build Docker image and push to ECR
 
+        # Build Docker image and push to ECR
         current = Path(__file__).parent
         docker_dir = str(Path(current / 'docker'))
         docker_image_asset = ecr_assets.DockerImageAsset(
@@ -32,6 +32,50 @@ class ChatBot(Construct):
 
         # Create a VPC
         vpc = ec2.Vpc(self, 'ChatVpc', max_azs=2)
+
+        vpc_log_group = logs.LogGroup(
+            self,
+            'VPCLogGroup',
+            log_group_name='ecs-cdk-vpc-flow',
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        # Setup IAM user for logs
+        vpc_flow_role = iam.Role(
+            self,
+            'FlowLog',
+            assumed_by=iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+            inline_policies={
+                'ses': iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                'logs:CreateLogGroup',
+                                'logs:CreateLogStream',
+                                'logs:PutLogEvents',
+                                'logs:DescribeLogGroups',
+                                'logs:DescribeLogStreams',
+                            ],
+                            resources=[vpc_log_group.log_group_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+            },
+        )
+
+        # Setup VPC flow logs
+        ec2.CfnFlowLog(
+            self,
+            'FlowLogs',
+            resource_id=vpc.vpc_id,
+            resource_type='VPC',
+            traffic_type='ALL',
+            deliver_logs_permission_arn=vpc_flow_role.role_arn,
+            log_destination_type='cloud-watch-logs',
+            log_group_name=vpc_log_group.log_group_name,
+        )
 
         # Create an ECS cluster
         cluster = ecs.Cluster(self, 'ChatCluster', vpc=vpc, container_insights=True, enable_fargate_capacity_providers=True)
@@ -58,15 +102,6 @@ class ChatBot(Construct):
         # Open the necessary port internally
         container.add_port_mappings(ecs.PortMapping(container_port=8501, protocol=ecs.Protocol.TCP))
 
-        # Security group for the Fargate service
-        security_group = ec2.SecurityGroup(self, 'ChatSecurityGroup', vpc=vpc)
-
-        # Allow inbound traffic on ports 80 (HTTP) and 443 (HTTPS) from any IP
-        security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), 'Allow HTTP traffic from the internet')
-        security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet')
-        security_group.add_ingress_rule(ec2.Peer.any_ipv6(), ec2.Port.tcp(80), 'Allow HTTP traffic from the internet (IPv6)')
-        security_group.add_ingress_rule(ec2.Peer.any_ipv6(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet (IPv6)')
-
         access_logs_bucket = s3.Bucket(
             scope=self,
             id='accessLogsS3Bucket',
@@ -92,6 +127,13 @@ class ChatBot(Construct):
             auto_delete_objects=True,  # False in production
             enforce_ssl=True,
         )
+
+        # Security group for the Fargate service
+        security_group = ec2.SecurityGroup(self, 'ChatSecurityGroup', vpc=vpc)
+
+        # Allow inbound traffic on 443 (HTTPS) from any IP
+        security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet')
+        security_group.add_ingress_rule(ec2.Peer.any_ipv6(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet (IPv6)')
 
         # Create a Fargate service and make it publicly accessible
         fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
@@ -140,8 +182,6 @@ class ChatBot(Construct):
         scalable_target.scale_on_cpu_utilization(
             'CpuScaling',
             target_utilization_percent=70,
-            scale_in_cooldown=Duration.seconds(60),
-            scale_out_cooldown=Duration.seconds(60),
         )
 
         scalable_target.scale_on_memory_utilization('MemoryScaling', target_utilization_percent=80)
