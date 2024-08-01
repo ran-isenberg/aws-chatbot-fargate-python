@@ -128,13 +128,6 @@ class ChatBot(Construct):
             enforce_ssl=True,
         )
 
-        # Security group for the Fargate service
-        security_group = ec2.SecurityGroup(self, 'ChatSecurityGroup', vpc=vpc)
-
-        # Allow inbound traffic on 443 (HTTPS) from any IP
-        security_group.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet')
-        security_group.add_ingress_rule(ec2.Peer.any_ipv6(), ec2.Port.tcp(443), 'Allow HTTPS traffic from the internet (IPv6)')
-
         # Create a Fargate service and make it publicly accessible
         fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
@@ -148,7 +141,6 @@ class ChatBot(Construct):
             domain_name=self.network_assets.full_domain,
             domain_zone=route53.HostedZone.from_lookup(self, 'BaseZone', domain_name=self.network_assets.domain_name),
             desired_count=1,
-            security_groups=[security_group],
             load_balancer_name='chatbot-application-lb',
             redirect_http=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
